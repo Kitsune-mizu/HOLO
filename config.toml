@@ -1,0 +1,105 @@
+# Pengaturan HologramOS. Kunci API tidak ditulis di sini, simpan di file .env.
+
+[app]
+mode = "offline"            # mode awal: "offline" atau "online"
+window_width = 1280
+window_height = 720
+default_model = "pyramid"   # id model di assets/models.json
+
+[viewer]
+wireframe = true            # garis kawat seperti gambar referensi. false = permukaan penuh
+idle_spin_dps = 8           # putaran pelan saat diam, derajat per detik. 0 = mati
+rotate_step_deg = 45        # sudut satu kali swipe atau perintah "putar"
+zoom_step = 1.35            # pengali sekali zoom in/out
+
+[camera]
+enabled = true
+index = 0
+width = 640
+height = 480
+fps = 30
+detect_fps = 24             # kecepatan deteksi tangan (thread terpisah); naikkan kalau CPU kuat dan swipe cepat masih putus
+
+[hands]
+min_confidence = 0.6
+min_open_fingers = 3        # hanya untuk info di layar (status "terbuka"/"tertutup"), tidak mempengaruhi gesture
+
+[gesture]
+# Satu tangan menunjuk, telunjuk dimiringkan kanan/kiri = model berputar terus selama pose ditahan.
+deadzone_deg = 8             # kemiringan di bawah ini dianggap tegak lurus, tidak berputar
+max_tilt_deg = 45            # kemiringan sebesar ini (atau lebih) = kecepatan putar maksimum
+max_dps = 150                # kecepatan putar maksimum, derajat per detik
+# Satu tangan DUA JARI (telunjuk + tengah, seperti "peace" tapi rapat), dimiringkan kanan/kiri =
+# model mengangguk atas/bawah. Mekanismenya sama persis dengan kemiringan satu-jari di atas, hanya
+# jumlah jari yang membedakan mana yang mengendalikan yaw dan mana yang mengendalikan pitch.
+pitch_deadzone_deg = 8       # sama seperti deadzone_deg di atas, untuk sumbu pitch
+pitch_max_tilt_deg = 45      # sama seperti max_tilt_deg di atas, untuk sumbu pitch
+pitch_max_dps = 150          # sama seperti max_yaw_dps di atas, untuk sumbu pitch
+# Dua tangan menunjuk, jarak ujung telunjuk berubah = zoom (seperti cubit di layar sentuh).
+deadzone_per_s = 0.03        # perubahan jarak sekecil ini per detik dianggap diam, tidak zoom
+gain = 1.6                   # makin besar, makin sensitif gerakan tangan jadi zoom
+max_rate_per_s = 1.2         # batas laju zoom, supaya tidak melompat
+min_cutoff = 1.2             # filter One Euro: makin kecil makin halus
+beta = 3.0                   # filter One Euro: makin besar makin responsif saat cepat
+dropout_grace_s = 0.15       # kerangka tangan boleh hilang sebentar (gerakan cepat) tanpa membatalkan gesture
+
+# [swipe] tidak lagi dipakai sejak gesture kontinu di atas menggantikannya (lihat hologram/vision/gesture.py).
+# Dibiarkan untuk hologram/vision/swipe.py, yang masih ada dan dites tapi tidak dipanggil dari deteksi tangan.
+[swipe]
+distance = 0.22
+min_speed = 0.9
+window_s = 0.40
+cooldown_s = 0.70
+dominance = 1.6
+min_cutoff = 1.5
+beta = 4.0
+
+[offline]
+model = "auto"              # "auto" = model Ollama terbesar yang muat di RAM
+host = ""                   # kosong = alamat bawaan Ollama
+reserve_ram_gb = 2.0        # RAM yang disisakan untuk sistem
+fast_commands = true        # zoom, putar, ganti model dijalankan langsung tanpa menunggu model
+timeout_s = 120
+
+[online]
+gemini_models = ["gemini-3.5-flash-lite"]   # satu model saja: satu pesan = satu permintaan. Daftar untuk kuncimu: python tools/check_gemini.py
+min_interval_s = 4          # jarak minimum antar permintaan ke Google
+cooldown_s = 90             # jeda otomatis setelah kuota habis (429)
+use_search = false           # izinkan Gemini mencari info (Google Search)
+attach_snapshot = true      # kirim tangkapan tampilan 3D ke AI online
+timeout_s = 45
+
+# Penyedia cadangan (format OpenAI). Aktif kalau enabled = true dan kuncinya ada di .env.
+# Batas gratis dan nama model sering berubah, cek dokumen penyedia sebelum dipakai.
+[[online.fallback]]
+name = "Groq"
+base_url = "https://api.groq.com/openai/v1"
+model = "llama-3.3-70b-versatile"
+key_env = "GROQ_API_KEY"
+vision = false
+enabled = false
+
+[[online.fallback]]
+name = "OpenRouter"
+base_url = "https://openrouter.ai/api/v1"
+model = "meta-llama/llama-3.3-70b-instruct:free"
+key_env = "OPENROUTER_API_KEY"
+vision = false
+enabled = false
+
+[voice]
+enabled = true
+stt_model = "base"          # folder di assets/whisper/ (base atau small)
+stt_language = ""           # kosong = deteksi otomatis (Indonesia atau Inggris). "id" = paksa Indonesia
+silence_s = 1.2             # hening sekian detik = selesai bicara
+max_record_s = 20
+tts_rate = 175
+tts_engine = "edge"          # "edge" = suara online yang natural (butuh internet). "system" = suara bawaan Windows
+tts_voice = "id-ID-GadisNeural"   # perempuan. Laki-laki: id-ID-ArdiNeural
+tts_voice_en = "en-US-JennyNeural"   # suara untuk balasan berbahasa Inggris
+tts_edge_rate = "+0%"       # kecepatan bicara, mis. "+10%" lebih cepat, "-10%" lebih pelan
+tts_language = "id"         # untuk suara sistem (cadangan)
+tts_system_voice_en = "Zira"   # suara Windows untuk Inggris saat offline (perempuan). Laki-laki: "David"
+
+[network]
+check_interval_s = 8

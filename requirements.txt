@@ -1,0 +1,13 @@
+# Diuji bersamaan di Python 3.12. Versi dikunci supaya semuanya berhasil di-import bareng.
+PySide6==6.11.2
+mediapipe==1.0.1
+opencv-python-headless==5.0.0.93
+faster-whisper==1.2.1
+sounddevice==0.5.6
+soundfile==0.14.0
+pyttsx3==2.99
+ollama==0.6.2
+httpx==0.28.1
+psutil==7.2.2
+python-dotenv==1.2.3
+tomli>=2.0; python_version < "3.11"

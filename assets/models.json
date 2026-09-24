@@ -1,0 +1,52 @@
+{
+  "models": [
+    {
+      "id": "pyramid",
+      "name": "Pyramid",
+      "aliases": ["piramida", "piramid", "limas", "pyramid shape"],
+      "category": "bentuk dasar",
+      "country": null,
+      "kind": "limas segi empat",
+      "file": "pyramid.glb",
+      "description": "Limas segi empat sederhana, dibuat oleh skrip contoh.",
+      "license": "CC0-1.0",
+      "source": "tools/make_placeholder_models.py"
+    },
+    {
+      "id": "drone",
+      "name": "Drone",
+      "aliases": ["quadcopter", "multirotor", "drone quadcopter", "uav"],
+      "category": "drone",
+      "country": null,
+      "kind": "quadcopter empat baling-baling",
+      "file": "drone.glb",
+      "description": "Drone quadcopter sederhana dengan badan, empat lengan, empat baling-baling, kamera kecil, dan kaki. Bentuk generik buatan skrip, bukan replika produk tertentu.",
+      "license": "CC0-1.0",
+      "source": "tools/make_placeholder_models.py"
+    },
+    {
+      "id": "fighter",
+      "name": "Fighter Jet",
+      "aliases": ["jet tempur", "pesawat tempur", "jet", "fighter", "pesawat jet"],
+      "category": "pesawat",
+      "country": null,
+      "kind": "jet tempur sayap delta",
+      "file": "fighter.glb",
+      "description": "Jet tempur sayap delta sederhana dengan kanopi, sirip ekor, dan stabilizer. Bentuk generik buatan skrip, bukan replika pesawat tertentu.",
+      "license": "CC0-1.0",
+      "source": "tools/make_placeholder_models.py"
+    },
+    {
+      "id": "bomber",
+      "name": "Bomber",
+      "aliases": ["pembom", "pesawat pembom", "bomber aircraft", "pesawat bomber"],
+      "category": "pesawat",
+      "country": null,
+      "kind": "pembom berat empat mesin",
+      "file": "bomber.glb",
+      "description": "Pesawat pembom berat sederhana dengan sayap menyapu, empat mesin, dan ekor. Bentuk generik buatan skrip, bukan replika pesawat tertentu.",
+      "license": "CC0-1.0",
+      "source": "tools/make_placeholder_models.py"
+    }
+  ]
+}

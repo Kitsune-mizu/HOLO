@@ -50,11 +50,11 @@ class Controller(AppState):
         self._snap_token = 0
         self._ollama_err = None
         self._lang = "id"                       # bahasa percakapan terakhir: "id" atau "en"
-        self._pending: list[str] = []          # jawaban yang menunggu suara siap, supaya teks dan suara bareng
+        self._pending: list[str] = []          # jawaban yang menunggu tampil (harus segera lewat textReady)
         self._warmed: set[str] = set()
         self.poller = None
         self.camera_link = CameraLink(self)
-        self.voice_link = VoiceLink(self)
+        self.voice_link = VoiceLink(self)   # textReady->_flush_pending sudah disambungkan di dalam VoiceLink
         self._set("mode", self.router.mode)
         self._set("voiceEnabled", True)   # suara AI aktif secara default kalau subsistemnya tersedia
         self._sync_router()
@@ -242,10 +242,10 @@ class Controller(AppState):
         record = json.dumps({"action": cmd.action, "args": cmd.args, "reply": text}, ensure_ascii=False)
         self._history = (self._history + [Turn("assistant", record)])[-12:]
         if self.voice_link.enabled:
-            self._pending.append(text)                     # teks tampil saat audio mulai diputar
+            self._pending.append(text)                     # ditampilkan begitu textReady dipancarkan Speaker
             self._set("busy", True)
             self.voice_link.say(text, lang.detect(text, self._lang))   # suara mengikuti bahasa balasan
-            QTimer.singleShot(6000, self._flush_pending)   # jaring pengaman: teks tampil meski suara masih dicoba
+            QTimer.singleShot(1200, self._flush_pending)    # jaring pengaman saja: harusnya textReady sudah lebih cepat
         else:
             self.messages.append("ai", text)
 

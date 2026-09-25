@@ -58,7 +58,9 @@ class Speaker(QThread):
     speechStarted = Signal()
     speechFinished = Signal(str)     # teks kosong = selesai normal, selain itu kegagalan yang benar-benar fatal
     voiceChosen = Signal(str)
-    audioReady = Signal()            # audio sudah jadi dan mulai diputar: saat inilah teks jawaban boleh tampil
+    textReady = Signal()             # BARU: dipancarkan SEGERA, sebelum audio disintesis - sambungkan tampilan
+                                      # teks jawaban ke sinyal ini, bukan ke audioReady lagi.
+    audioReady = Signal()            # audio sudah siap dan (setelah jeda minimal) mulai diputar
     speechWarning = Signal(str)      # peringatan tidak fatal (mis. sedang pakai suara cadangan)
 
     def __init__(self, cfg: dict, meter: LevelMeter, parent=None) -> None:
@@ -103,13 +105,17 @@ class Speaker(QThread):
                 continue
             self._interrupt.clear()
             self.speechStarted.emit()
+            self.textReady.emit()             # teks jawaban tampil SEKARANG, tidak menunggu suara jadi
+            text_shown_at = time.monotonic()
             error = ""
             stem = Path(tempfile.gettempdir()) / f"hologram_tts_{os.getpid()}"
             try:
                 made = self._synthesize(text, stem, lang)
                 if not self._interrupt.is_set():
-                    self.audioReady.emit()
-                    self._play(made)
+                    self._wait_for_lead_time(text_shown_at)
+                    if not self._interrupt.is_set():
+                        self.audioReady.emit()
+                        self._play(made)
             except Exception as exc:
                 error = f"Suara AI tidak tersedia: {exc}"
             finally:
@@ -118,6 +124,20 @@ class Speaker(QThread):
                 self.meter.reset()
                 if self._queue.empty():          # ada ucapan baru menunggu: jangan kirim "selesai" dulu
                     self.speechFinished.emit(error)
+
+    def _wait_for_lead_time(self, text_shown_at: float) -> None:
+        """Pastikan ada jarak minimal antara teks tampil dan suara mulai (default 1 detik), supaya
+        terasa alami dan responsif: teks tidak menunggu suara, suara menyusul sebentar sesudahnya.
+
+        Kalau sintesis suara sendiri sudah makan waktu lebih lama dari jeda minimal ini (jaringan
+        lambat, dsb.), TIDAK ditambah tunggu lagi - langsung main begitu siap. Jeda ini cuma mengisi
+        kekosongan kalau suara ternyata sudah siap lebih cepat dari jeda yang diinginkan, supaya
+        suara tidak "menyalak" terlalu cepat menimpa teks yang baru saja muncul.
+        """
+        min_lead = float(self._cfg.get("tts_text_lead_time", 1.0))
+        remaining = min_lead - (time.monotonic() - text_shown_at)
+        if remaining > 0:
+            self._interrupt.wait(remaining)   # berhenti lebih awal kalau ucapan diinterupsi saat menunggu
 
     def _synthesize(self, text: str, stem: Path, lang: str = "id") -> Path:
         """Suara online (edge) dulu kalau dipilih, dengan retry. Gagal terus: suara bawaan sistem.
@@ -199,10 +219,8 @@ class Speaker(QThread):
             voice = find_voice(voices, preferred) or pick_voice(voices, wanted)
 
             if voice is None:
-                # Tidak ada suara yang cocok bahasanya: dulu ini membuat AI diam total selamanya kalau
-                # OS tidak punya suara Indonesia (kasus paling umum, karena jarang terpasang bawaan).
-                # Sekarang: tetap bicara pakai suara pertama yang ada, dengan peringatan jelas di chat,
-                # daripada AI seolah rusak padahal cuma bahasa suaranya yang tidak pas.
+                # Tidak ada suara yang cocok bahasanya: tetap bicara pakai suara pertama yang ada,
+                # dengan peringatan jelas di chat, daripada AI diam total.
                 if voices:
                     voice = voices[0].id
                     self.speechWarning.emit(

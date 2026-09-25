@@ -44,6 +44,7 @@ class VoiceLink(QObject):
         self.speaker = Speaker(cfg, self.meter, self)
         self.speaker.speechStarted.connect(self._on_started)
         self.speaker.speechFinished.connect(self._on_finished)
+        self.speaker.textReady.connect(self._on_text_ready)      # BARU: teks tampil segera, tidak nunggu suara
         self.speaker.audioReady.connect(self._on_audio_ready)
         self.speaker.speechWarning.connect(self._on_warning)
         self.listener = Listener(cfg, self)
@@ -102,6 +103,11 @@ class VoiceLink(QObject):
             self.listener.stop_listening()
         self.ctl._set("speaking", True)
         self._level_timer.start()
+
+    @Slot()
+    def _on_text_ready(self) -> None:
+        """Teks jawaban tampil sekarang - tidak menunggu audio disintesis sama sekali."""
+        self.ctl._flush_pending()
 
     @Slot()
     def _on_audio_ready(self) -> None:

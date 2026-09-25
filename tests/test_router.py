@@ -126,3 +126,49 @@ def test_everything_down_raises_readable_error():
     r.update_status(True, "Ollama tidak aktif. Jalankan Ollama.", DeviceInfo(1, 1))
     with pytest.raises(AllFailed, match="Ollama tidak aktif"):
         r.ask(BUILD, HISTORY)
+
+
+def _gemini_router(first_error, models_=("m-a", "m-b")):
+    class Scripted(Fake):
+        def generate(self, model, system, history, image=None):
+            self.calls.append((model, system, image))
+            if self.error and model == "m-a":
+                raise ProviderError(self.error, self.status)
+            return '{"action":"reply"}'
+    g = Scripted("Gemini", error=first_error[0])
+    g.status = first_error[1]
+    r = Router(Fake("Ollama", '{"action":"reply"}'), [OnlineTarget(g, m, True) for m in models_], mode="online")
+    r.update_status(True, models(), DeviceInfo(32 * GB, 16 * GB))
+    return r, g
+
+
+def test_one_attempt_per_provider_per_message():
+    r, g = _gemini_router(("Kuota gratis Gemini habis (429).", 429))
+    reply = r.ask(BUILD, HISTORY)
+    assert len(g.calls) == 1 and reply.mode == "offline"       # model kedua tidak ikut dicoba
+
+
+def test_quota_error_pauses_gemini_for_a_minute():
+    r, g = _gemini_router(("Kuota gratis Gemini habis (429).", 429))
+    r.ask(BUILD, HISTORY)
+    ok, why = r.set_mode("online")
+    assert not ok and "dibatasi" in why
+    r.ask(BUILD, HISTORY)
+    assert len(g.calls) == 1                                    # tidak menghantam lagi selama jeda
+
+
+def test_missing_model_is_skipped_next_time_but_other_model_still_works():
+    r, g = _gemini_router(("Model m-a tidak ditemukan.", 404))
+    first = r.ask(BUILD, HISTORY)
+    assert len(g.calls) == 1 and first.mode == "offline"
+    assert r.set_mode("online")[0]
+    second = r.ask(BUILD, HISTORY)
+    assert [c[0] for c in g.calls] == ["m-a", "m-b"] and second.mode == "online"
+
+
+def test_online_history_is_trimmed_and_starts_with_user():
+    r, g = _gemini_router((None, None))
+    long = [Turn("user" if i % 2 == 0 else "assistant", f"t{i}") for i in range(11)]
+    r.ask(BUILD, long)
+    sent = g.calls[0]
+    assert sent[0] == "m-a"

@@ -6,6 +6,7 @@ import sys
 
 from .config import UI_DIR, Config, load_config
 
+
 def _preload_quick3d() -> None:
     """Windows: muat DLL Quick 3D lebih dulu supaya Qt menemukan dependensinya."""
     if sys.platform != "win32":
@@ -27,6 +28,7 @@ def _preload_quick3d() -> None:
     except Exception:
         pass
 
+
 def build(cfg: Config, no_camera: bool = False, no_voice: bool = False):
     """Buat QGuiApplication, engine, dan controller. Dipisah dari run() supaya bisa diuji."""
     os.environ.setdefault("QT_QUICK_CONTROLS_STYLE", "Basic")   # gaya yang bisa dikustom penuh
@@ -37,6 +39,7 @@ def build(cfg: Config, no_camera: bool = False, no_voice: bool = False):
     from PySide6.QtQml import QQmlApplicationEngine
 
     from .core.controller import Controller
+    from .core.editor import ProjectEditor
     from .vision.frame_provider import FrameProvider
 
     app = QGuiApplication.instance() or QGuiApplication(sys.argv)
@@ -44,12 +47,15 @@ def build(cfg: Config, no_camera: bool = False, no_voice: bool = False):
 
     provider = FrameProvider()
     controller = Controller(cfg, provider, no_camera=no_camera, no_voice=no_voice)
+    # Diberi parent controller (bukan dibiarkan sementara) supaya tidak dibuang Python sebelum QML memakainya.
+    project_editor = ProjectEditor(controller)
 
     engine = QQmlApplicationEngine()
     engine.addImageProvider("camera", provider)
     context = engine.rootContext()
     context.setContextProperty("controller", controller)
     context.setContextProperty("messageModel", controller.messages)
+    context.setContextProperty("editor", project_editor)
     context.setContextProperty("viewCfg", {
         "initialWidth": int(cfg.get("app.window_width", 1280)),
         "initialHeight": int(cfg.get("app.window_height", 720)),

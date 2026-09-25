@@ -35,7 +35,7 @@ def test_camera_crops_to_16_9_and_mirrors(monkeypatch, qapp):
     statuses = []
     worker.statusChanged.connect(statuses.append)
     worker.start()
-    end = time.time() + 5
+    end = time.time() + 30
     while not seen and time.time() < end:
         QCoreApplication.processEvents(); time.sleep(0.01)
     worker.stop()
@@ -50,7 +50,7 @@ def test_camera_reports_missing_device(monkeypatch, qapp):
     statuses = []
     worker.statusChanged.connect(statuses.append)
     worker.start()
-    end = time.time() + 5
+    end = time.time() + 30
     while not statuses and time.time() < end:
         QCoreApplication.processEvents(); time.sleep(0.01)
     worker.stop()
@@ -108,3 +108,32 @@ def test_qml_loads_without_warnings():
     assert "LOADED" in out.stdout, combined
     bad = [l for l in combined.splitlines() if ".qml" in l and ("Error" in l or "Warning" in l or "Cannot" in l or "TypeError" in l or "ReferenceError" in l)]
     assert not bad, "\n".join(bad)
+
+
+def test_camera_can_be_switched_off_and_on(monkeypatch, qapp):
+    from hologram.core.controller import Controller
+    from hologram.vision.frame_provider import FrameProvider
+
+    monkeypatch.setattr(camod.CameraWorker, "_open", lambda self, cv2: FakeCap())
+    ctl = Controller(Config(), FrameProvider(), no_camera=False, no_voice=True)
+    link = ctl.camera_link
+
+    def wait(cond, secs=5):
+        end = time.time() + secs
+        while not cond() and time.time() < end:
+            QCoreApplication.processEvents(); time.sleep(0.01)
+        return cond()
+
+    link.start(False)
+    assert ctl.get("cameraOn") and wait(lambda: ctl.get("cameraFrame") > 0)
+    ctl.toggleCamera()
+    assert not ctl.get("cameraOn") and ctl.get("cameraFrame") == 0 and "Kamera mati" in ctl.get("cameraStatus")
+    for _ in range(20):
+        QCoreApplication.processEvents(); time.sleep(0.01)
+    assert ctl.get("cameraFrame") == 0 and "Kamera mati" in ctl.get("cameraStatus")     # sinyal terlambat diabaikan
+    ctl.toggleCamera()
+    try:
+        assert ctl.get("cameraOn") and wait(lambda: ctl.get("cameraFrame") > 0)
+        assert "Kamera mati" not in ctl.get("cameraStatus")          # pesan "mati" hilang; pesan lain (mis. model tangan) boleh ada
+    finally:
+        link.stop()

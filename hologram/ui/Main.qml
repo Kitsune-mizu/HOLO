@@ -18,6 +18,7 @@ Window {
     property bool convOpen: true      // kartu percakapan saja
     property bool sideOpen: true      // seluruh sisi kanan: info + kamera
     property bool infoOpen: true      // kartu info saja
+    property bool codeOpen: false     // panel editor kode (overlay penuh)
     property real fps: 0
     property int frames: 0
 
@@ -41,11 +42,19 @@ Window {
         Txt { text: "HOLOGRAM OS"; font.pixelSize: Theme.fsTitle; font.bold: true; font.letterSpacing: Theme.px(1); color: Theme.ink }
         Txt { text: "SHAPE: " + controller.shapeName.toUpperCase(); font.pixelSize: Theme.px(15); color: Theme.muted }
     }
-    ToggleButton {
+    Row {
         anchors { left: header.right; leftMargin: Theme.px(20); verticalCenter: header.verticalCenter }
-        text: "CHAT"
-        checked: win.chatOpen
-        onClicked: win.chatOpen = !win.chatOpen
+        spacing: Theme.px(8)
+        ToggleButton {
+            text: "CHAT"
+            checked: win.chatOpen
+            onClicked: win.chatOpen = !win.chatOpen
+        }
+        ToggleButton {
+            text: "KODE"
+            checked: win.codeOpen
+            onClicked: win.codeOpen = !win.codeOpen
+        }
     }
 
     // Kiri: chat AI
@@ -124,5 +133,26 @@ Window {
             }
         }
         CameraCard { width: parent.width; height: width * 9 / 16 }
+    }
+
+    // Editor kode: overlay besar di atas semuanya, supaya ada cukup ruang untuk pohon file + isi file.
+    // Latar gelap dulu (klik di luar panel = tutup), baru panelnya di atas supaya menerima kliknya sendiri.
+    Rectangle {
+        anchors.fill: parent
+        color: Qt.rgba(0, 0, 0, 0.55)
+        visible: win.codeOpen
+        opacity: win.codeOpen ? 1 : 0
+        Behavior on opacity { NumberAnimation { duration: Theme.normal } }
+        MouseArea { anchors.fill: parent; onClicked: win.codeOpen = false }
+    }
+    CodeEditorPanel {
+        anchors.centerIn: parent
+        width: Math.min(win.width - Theme.margin * 2, Theme.px(1040))
+        height: Math.min(win.height - Theme.margin * 2, Theme.px(680))
+        scale: win.codeOpen ? 1 : 0.96
+        opacity: win.codeOpen ? 1 : 0
+        visible: opacity > 0.01
+        Behavior on opacity { NumberAnimation { duration: Theme.normal } }
+        Behavior on scale { NumberAnimation { duration: Theme.normal; easing.type: Easing.OutCubic } }
     }
 }

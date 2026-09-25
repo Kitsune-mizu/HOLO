@@ -65,7 +65,7 @@ timeout_s = 120
 gemini_models = ["gemini-3.5-flash-lite"]   # satu model saja: satu pesan = satu permintaan. Daftar untuk kuncimu: python tools/check_gemini.py
 min_interval_s = 4          # jarak minimum antar permintaan ke Google
 cooldown_s = 90             # jeda otomatis setelah kuota habis (429)
-use_search = false           # izinkan Gemini mencari info (Google Search)
+use_search = true           # izinkan Gemini mencari info (Google Search)
 attach_snapshot = true      # kirim tangkapan tampilan 3D ke AI online
 timeout_s = 45
 

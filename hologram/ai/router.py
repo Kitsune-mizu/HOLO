@@ -1,6 +1,8 @@
 """Mode Offline / Online, pilihan model, dan urutan cadangan antar penyedia."""
 from __future__ import annotations
 
+import math
+import time
 from dataclasses import dataclass
 from typing import Callable
 
@@ -42,6 +44,7 @@ class Router:
         self.ollama_error = "Ollama belum dicek."
         self.device = device.DeviceInfo(0, 0)
         self._used: tuple[str, str] | None = None
+        self._blocked: dict[str, float] = {}     # kunci -> waktu (monotonic) sampai boleh dicoba lagi
 
     # ------------------------------------------------------------------ status
     def update_status(self, net: bool, ollama: list[OllamaModel] | str, info: device.DeviceInfo) -> list[str]:
@@ -67,7 +70,35 @@ class Router:
             return False, "Tidak ada internet."
         if not any(t.has_key for t in self.targets):
             return False, "Kunci Gemini belum diisi. Salin .env.example ke .env lalu isi GEMINI_API_KEY."
+        if not self._online_targets():
+            return False, self._block_reason()
         return True, ""
+
+    # ---------------------------------------------------------------- jeda dan blokir
+    def _blocked_now(self, key: str) -> bool:
+        return self._blocked.get(key, 0.0) > time.monotonic()
+
+    def _penalize(self, provider: Provider, model: str, exc: ProviderError) -> None:
+        """404: model itu dilewati sampai aplikasi dibuka lagi. 429: penyedia dijeda 60 detik. Kunci ditolak: dijeda lama."""
+        if exc.status == 404:
+            self._blocked[f"{provider.name}:{model}"] = math.inf
+        elif exc.status == 429:
+            self._blocked[provider.name] = time.monotonic() + 60
+        elif exc.status in (401, 403):
+            self._blocked[provider.name] = math.inf
+
+    def _block_reason(self) -> str:
+        for t in self.targets:
+            if not t.has_key:
+                continue
+            wait = self._blocked.get(t.provider.name, 0.0) - time.monotonic()
+            if wait > 0:
+                if math.isinf(wait):
+                    return f"Kunci {t.provider.name} ditolak. Periksa kuncinya di .env lalu buka aplikasi lagi."
+                return f"{t.provider.name} sedang dibatasi (kuota). Coba lagi dalam {int(wait) + 1} detik."
+            if self._blocked_now(t.id):
+                return f"Model {t.model} tidak ditemukan. Jalankan tools/check_gemini.py lalu ubah gemini_models di config.toml."
+        return "Tidak ada penyedia online yang siap."
 
     def ollama_ready(self) -> bool:
         return bool(self.ollama_models)
@@ -148,7 +179,8 @@ class Router:
         return device.pick_model([(m.name, m.size) for m in self.ollama_models], self.device, self.reserve_gb)
 
     def _online_targets(self) -> list[OnlineTarget]:
-        ready = [t for t in self.targets if t.has_key]
+        ready = [t for t in self.targets
+                 if t.has_key and not self._blocked_now(t.provider.name) and not self._blocked_now(t.id)]
         pref = self.choice["online"]
         first = [t for t in ready if t.id == pref]
         return first + [t for t in ready if t.id != pref]
@@ -178,18 +210,36 @@ class Router:
         chain = self._order(light)
         if not chain:
             raise AllFailed(self._empty_reason())
-        started_mode, problems = self.mode, []
+        started_mode, problems, tried = self.mode, [], set()
+        if started_mode == "online" and not light and not self._online_targets():
+            problems.append(self.online_ready()[1] or self._block_reason())
         for kind, provider, model, vision in chain:
-            if kind == "online" and not self.net:
-                problems.append("internet terputus")
-                continue
+            if kind == "online":
+                if not self.net:
+                    problems.append("internet terputus")
+                    continue
+                if provider.name in tried:          # satu percobaan per penyedia untuk tiap pesan
+                    continue
+                tried.add(provider.name)
             try:
-                text = provider.generate(model, build_system(kind == "online"), history, image if vision else None)
+                text = provider.generate(model, build_system(kind == "online"), self._trim(history, kind), image if vision else None)
             except ProviderError as exc:
                 problems.append(str(exc))
+                if kind == "online":
+                    self._penalize(provider, model, exc)
                 continue
             return self._success(kind, provider, model, text, started_mode, problems, light)
         raise AllFailed(" ".join(problems) or self._empty_reason())
+
+    @staticmethod
+    def _trim(history: list[Turn], kind: str) -> list[Turn]:
+        """Penyedia online hanya menerima 6 giliran terakhir, dimulai dari giliran pengguna, supaya token hemat."""
+        if kind != "online":
+            return history
+        recent = history[-6:]
+        while recent and recent[0].role != "user":
+            recent = recent[1:]
+        return recent or history[-1:]
 
     def _success(self, kind, provider, model, text, started_mode, problems, light) -> Reply:
         notes: list[str] = []

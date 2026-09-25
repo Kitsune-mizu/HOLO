@@ -26,6 +26,7 @@ Butuh Python 3.10 sampai 3.12 (versi paket di bawah diuji bersamaan di 3.12).
 
 ```bash
 python -m venv .venv
+Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
 # Windows: .venv\Scripts\activate      macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
 ```
@@ -69,7 +70,9 @@ Dropdown di kartu chat menampilkan daftar model seperti `ollama list` (NAME, ID,
 
 **Online lewat Gemini.** Salin `.env.example` menjadi `.env`, isi `GEMINI_API_KEY` (kunci gratis dari Google AI Studio). Tekan **ONLINE**. Pada mode ini AI menerima tangkapan tampilan 3D dan boleh mencari info di internet, jadi pertanyaan seperti "ini model apa, jelaskan jenisnya" dijawab dari gambar dan data model.
 
-Nama model Gemini ada di `config.toml` (`gemini_models`). Nama dan batas gratisnya sering berubah, jadi cek dulu di ai.google.dev bila muncul galat 404 atau 429.
+Nama model Gemini ada di `config.toml` (`gemini_models`). Model lama cepat pensiun (`gemini-1.5-flash`, `gemini-2.0-flash`, dan `gemini-2.5-*` sudah dijadwalkan mati atau sudah mati), jadi jangan menebak nama. Jalankan `python tools/check_gemini.py` untuk melihat model yang benar-benar tersedia untuk kuncimu. Perintah itu tidak memakai kuota.
+
+Aplikasi sengaja hemat permintaan: satu pesan hanya dikirim satu kali ke Gemini, tanpa mengulang. Kalau kuota habis (429), Gemini dijeda 60 detik. Kalau model tidak ditemukan (404), model itu dilewati sampai aplikasi dibuka lagi. Selama jeda, AI memakai mode offline dan menuliskan alasannya di chat.
 
 Aturan pindah otomatis, semuanya ditulis satu baris di chat:
 
@@ -161,4 +164,3 @@ python -m pytest tests -q
 Sudah, di lingkungan Linux tanpa layar (Xvfb dengan OpenGL perangkat lunak): 56 uji otomatis, aplikasi utuh dijalankan dan diambil tangkapan layarnya di beberapa ukuran jendela dan keadaan (chat tersembunyi, dropdown terbuka, mode online, tanpa internet, bar suara, kamera dengan sumber video palsu). Rotasi dan zoom dicek lewat tangkapan layar.
 
 Belum bisa diuji di sana, jadi periksa di mesinmu: kamera dan deteksi tangan sungguhan (model MediaPipe tidak bisa diunduh dari lingkungan itu), mikrofon dan Whisper, suara pyttsx3, Ollama asli, dan panggilan Gemini asli. Logika di sekitar semuanya sudah diuji dengan penyedia tiruan. Uji gesture pertama kali sebaiknya dengan pencahayaan cukup dan telapak menghadap kamera.
-# HOLO

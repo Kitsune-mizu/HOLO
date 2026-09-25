@@ -1,4 +1,6 @@
-from hologram.vision.hands import DropoutGate, count_open_fingers, is_pointing, is_two_finger, palm_center
+from hologram.vision.hands import (
+    DropoutGate, ModeStabilizer, count_open_fingers, is_pointing, is_two_finger, palm_center,
+)
 
 
 def two_finger_hand():
@@ -59,3 +61,46 @@ def test_dropout_gate_tolerates_brief_flicker_but_not_long_loss():
 
 def test_dropout_gate_starts_lost_if_never_seen():
     assert DropoutGate(grace_s=0.15).update(False, 0.0) is True
+
+
+def test_is_two_finger_tolerates_a_slightly_lifted_ring_finger():
+    """Manis susah ditekuk sendiri secara anatomis: naikkan sedikit, pose dua-jari tetap terdeteksi."""
+    pts = two_finger_hand()
+    wrist = pts[0]
+    ring_pip = pts[14]
+    # angkat ujung manis sedikit dari posisi menekuk penuh, tapi masih jauh dari benar-benar lurus
+    pts[16] = (ring_pip[0] + (ring_pip[0] - wrist[0]) * 0.25, ring_pip[1] + (ring_pip[1] - wrist[1]) * 0.25)
+    assert is_two_finger(pts, aspect=0.5625) is True
+
+
+def test_is_two_finger_still_rejects_a_fully_extended_ring_finger():
+    pts = two_finger_hand()
+    pts[16] = (0.34, 0.30)   # manis benar-benar lurus, bukan cuma sedikit terangkat
+    assert is_two_finger(pts, aspect=0.5625) is False
+
+
+def test_mode_stabilizer_ignores_single_frame_flicker():
+    m = ModeStabilizer(frames=2)
+    assert m.update("point") == "other"     # baru 1 frame, belum cukup untuk masuk mode baru
+    assert m.update("other") == "other"     # berkedip balik: batal, bukan dianggap berganti
+    assert m.update("point") == "other"
+    assert m.update("point") == "point"     # 2 frame berturut-turut: baru dianggap benar berganti
+
+
+def test_mode_stabilizer_switches_after_enough_consistent_frames():
+    m = ModeStabilizer(frames=2)
+    m.update("point"); m.update("point")
+    assert m._current == "point"
+    m.update("two")
+    assert m._current == "point"            # baru 1 frame "two", belum cukup
+    m.update("two")
+    assert m._current == "two"
+
+
+def test_mode_stabilizer_reset_forgets_current_mode():
+    m = ModeStabilizer(frames=2)
+    m.update("point"); m.update("point")
+    m.reset()
+    assert m._current == "other"
+    m.update("point")
+    assert m._current == "other"            # harus mulai dari nol lagi setelah reset

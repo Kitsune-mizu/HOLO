@@ -45,6 +45,7 @@ class VoiceLink(QObject):
         self.speaker.speechStarted.connect(self._on_started)
         self.speaker.speechFinished.connect(self._on_finished)
         self.speaker.audioReady.connect(self._on_audio_ready)
+        self.speaker.speechWarning.connect(self._on_warning)
         self.listener = Listener(cfg, self)
         self.listener.stateChanged.connect(self._on_listen_state)
         self.listener.heard.connect(self.ctl.transcriptReady)
@@ -105,6 +106,12 @@ class VoiceLink(QObject):
     @Slot()
     def _on_audio_ready(self) -> None:
         self.ctl._flush_pending()
+
+    @Slot(str)
+    def _on_warning(self, message: str) -> None:
+        """Peringatan tidak fatal (mis. lagi pakai suara cadangan). Ditampilkan tiap kejadian,
+        karena sudah dijarangkan sendiri oleh cooldown/backoff di Speaker, bukan spam per pesan."""
+        self.ctl._note(message)
 
     @Slot(str)
     def _on_finished(self, error: str) -> None:

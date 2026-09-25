@@ -43,7 +43,7 @@ DEFAULTS: dict[str, Any] = {
     "voice": {
         "enabled": True, "stt_model": "base", "stt_language": "id", "silence_s": 1.2,
         "max_record_s": 20, "tts_rate": 175, "tts_language": "id",
-        "tts_engine": "edge", "tts_voice": "id-ID-GadisNeural", "tts_voice_en": "en-US-JennyNeural", "tts_system_voice_en": "Zira", "tts_edge_rate": "+0%",
+        "tts_engine": "edge", "tts_voice": "id-ID-GadisNeural", "tts_voice_en": "en-US-JennyNeural", "tts_system_voice_en": "Zira", "tts_system_voice_id": "", "tts_edge_rate": "+0%",
     },
     "network": {"check_interval_s": 8},
 }

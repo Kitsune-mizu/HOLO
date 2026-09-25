@@ -85,6 +85,36 @@ def test_long_dropout_resets_the_gesture(qapp):
     assert labels[-1] == ""                                # gesture diberi tahu berhenti
 
 
+def test_stabilize_ignores_a_single_frame_flicker_from_point_to_two(qapp):
+    tracker, _, _, _ = make_tracker(qapp)
+    steady = pointing(0.85)
+    flicker = two_finger(0.85)
+    tracker._stabilize((steady,))              # dua frame dulu supaya mode "point" benar-benar aktif
+    tracker._stabilize((steady,))
+    s2 = tracker._stabilize((flicker,))         # satu frame menyimpang: belum cukup untuk berganti
+    s3 = tracker._stabilize((steady,))
+    assert s2[0].pointing and not s2[0].two_finger and s3[0].pointing
+
+
+def test_stabilize_switches_after_two_consistent_frames(qapp):
+    tracker, _, _, _ = make_tracker(qapp)
+    tracker._stabilize((pointing(0.85),))
+    tracker._stabilize((two_finger(0.85),))
+    tracker._stabilize((two_finger(0.85),))
+    result = tracker._stabilize((two_finger(0.85),))
+    assert result[0].two_finger and not result[0].pointing
+
+
+def test_stabilize_resets_slot_when_hand_disappears(qapp):
+    tracker, _, _, _ = make_tracker(qapp)
+    tracker._stabilize((two_finger(0.85), two_finger(0.15)))
+    tracker._stabilize((two_finger(0.85), two_finger(0.15)))
+    tracker._stabilize(())                    # kedua tangan hilang: slot harus direset
+    tracker._stabilize((pointing(0.85),))
+    result = tracker._stabilize((pointing(0.85),))
+    assert result[0].pointing                 # bukan lagi "two" basi dari sebelumnya
+
+
 def test_two_finger_hand_produces_pitch_not_yaw(qapp):
     tracker, spins, zooms, labels = make_tracker(qapp)
     gesture, gate = _build_controller(tracker._gesture_cfg), DropoutGate(0.15)

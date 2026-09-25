@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import os
 import queue
+import random
 import re
 import tempfile
 import threading
@@ -55,9 +56,10 @@ def find_voice(voices: list, name_part: str) -> str | None:
 
 class Speaker(QThread):
     speechStarted = Signal()
-    speechFinished = Signal(str)     # teks kosong = selesai normal, selain itu pesan kegagalan
+    speechFinished = Signal(str)     # teks kosong = selesai normal, selain itu kegagalan yang benar-benar fatal
     voiceChosen = Signal(str)
     audioReady = Signal()            # audio sudah jadi dan mulai diputar: saat inilah teks jawaban boleh tampil
+    speechWarning = Signal(str)      # peringatan tidak fatal (mis. sedang pakai suara cadangan)
 
     def __init__(self, cfg: dict, meter: LevelMeter, parent=None) -> None:
         super().__init__(parent)
@@ -66,7 +68,8 @@ class Speaker(QThread):
         self._queue: queue.Queue[tuple[str, str]] = queue.Queue()
         self._interrupt = threading.Event()
         self._quit = threading.Event()
-        self._edge_down_until = 0.0      # edge gagal (mis. tanpa internet): pakai suara sistem sampai waktu ini
+        self._edge_down_until = 0.0        # sedang istirahat dari edge sampai waktu ini (time.monotonic())
+        self._edge_consecutive_failures = 0
 
     def say(self, text: str, lang: str = "id") -> None:
         """Bicara dalam bahasa `lang` ("id" atau "en"). Ucapan yang sedang jalan dipotong."""
@@ -117,29 +120,53 @@ class Speaker(QThread):
                     self.speechFinished.emit(error)
 
     def _synthesize(self, text: str, stem: Path, lang: str = "id") -> Path:
-        """Suara online (edge) dulu kalau dipilih. Gagal atau tanpa internet: suara bawaan sistem.
+        """Suara online (edge) dulu kalau dipilih, dengan retry. Gagal terus: suara bawaan sistem.
 
-        Sebelum mencoba edge, cek koneksi cepat (di bawah 1 detik). Kalau jelas tidak ada internet,
-        langsung pakai suara sistem tanpa membuang waktu menunggu timeout edge dua kali berturut-turut,
-        dan tidak menghukum edge dengan masa istirahat panjang padahal penyebabnya cuma jaringan putus.
+        - Edge dicoba sampai 3 kali dengan jeda yang membesar (backoff) plus sedikit acak (jitter),
+          supaya gangguan sesaat (bukan benar-benar putus) punya peluang sembuh di percobaan berikutnya,
+          tanpa perlu menunggu satu putaran pesan lagi.
+        - Kalau tetap gagal setelah 3 kali, BARU dicek apakah internetnya memang mati. Kalau memang
+          mati, istirahat pendek dan tetap (5 detik) -- bukan salah layanan edge, jadi tidak dihukum
+          lama-lama, cukup coba lagi nanti kalau-kalau internetnya sudah kembali.
+        - Kalau internet ada tapi edge tetap gagal (layanannya sendiri yang bermasalah), istirahatnya
+          membesar tiap kali gagal berturut-turut (4s, 8s, 16s, maksimal 30s), supaya tidak terus
+          membuang waktu di setiap pesan padahal layanannya sedang benar-benar down.
+        - Suara sistem di akhir selalu jadi jaring pengaman: AI tidak pernah diam total.
         """
-        if self._cfg.get("tts_engine", "edge") == "edge" and time.monotonic() >= self._edge_down_until:
+        use_edge = (
+            self._cfg.get("tts_engine", "edge") == "edge"
+            and time.monotonic() >= self._edge_down_until
+        )
+        if use_edge:
+            last_error: Exception | None = None
+            for attempt in range(3):
+                try:
+                    path = self._synth_edge(text, stem.with_suffix(".mp3"), lang)
+                    self._edge_consecutive_failures = 0
+                    self._edge_down_until = 0.0
+                    return path
+                except Exception as exc:                  # noqa: BLE001 - sengaja tangkap semua, lalu retry
+                    last_error = exc
+                    if attempt < 2:
+                        time.sleep(0.3 * (2 ** attempt) + random.uniform(0, 0.2))
+
             if self._network_ok():
-                for attempt in range(2):                    # gangguan jaringan sesaat: coba sekali lagi, tapi cepat
-                    try:
-                        return self._synth_edge(text, stem.with_suffix(".mp3"), lang)
-                    except Exception:
-                        time.sleep(0.2)
-                self._edge_down_until = time.monotonic() + 12   # koneksi ada tapi tetap gagal: istirahat singkat
+                self._edge_consecutive_failures += 1
+                cooldown = min(4 * (2 ** min(self._edge_consecutive_failures - 1, 3)), 30)
             else:
-                self._edge_down_until = time.monotonic() + 4    # jelas tidak ada internet: cek lagi sebentar saja
+                self._edge_consecutive_failures = 0        # bukan salah layanan edge: jangan backoff panjang
+                cooldown = 5.0
+            self._edge_down_until = time.monotonic() + cooldown
+            self.speechWarning.emit(
+                f"Suara online gagal ({last_error}), pakai suara sistem selama {cooldown:.0f}s ke depan."
+            )
         return self._synth_system(text, stem.with_suffix(".wav"), lang)
 
     @staticmethod
     def _network_ok() -> bool:
         from ..ai.network import has_internet
 
-        return has_internet(timeout=0.8)
+        return has_internet(timeout=1.5)
 
     def _synth_edge(self, text: str, path: Path, lang: str = "id") -> Path:
         import edge_tts
@@ -165,14 +192,30 @@ class Speaker(QThread):
             engine.setProperty("rate", int(self._cfg.get("tts_rate", 175)))
             wanted = "en" if lang == "en" else str(self._cfg.get("tts_language", "id"))
             voices = list(engine.getProperty("voices") or [])  # type: ignore[arg-type] (pyttsx3 tanpa berkas tipe)
-            preferred = str(self._cfg.get("tts_system_voice_en" if lang == "en" else "tts_system_voice_id", "Zira" if lang == "en" else ""))
-            voice = find_voice(voices, preferred) or pick_voice(voices, wanted)   # Inggris: Zira (perempuan) dulu, bukan David
-            if voice is None and not self._cfg.get("tts_allow_foreign_voice", False):
-                # Jangan membaca teks Indonesia dengan suara Inggris (dan sebaliknya): lebih baik diam dengan pesan jelas.
-                raise RuntimeError(f"suara online gagal dan Windows tidak punya suara untuk bahasa '{wanted}'")
-            if voice:
-                engine.setProperty("voice", voice)
-            self.voiceChosen.emit(voice or "suara bawaan sistem")
+            preferred = str(self._cfg.get(
+                "tts_system_voice_en" if lang == "en" else "tts_system_voice_id",
+                "Zira" if lang == "en" else "",
+            ))
+            voice = find_voice(voices, preferred) or pick_voice(voices, wanted)
+
+            if voice is None:
+                # Tidak ada suara yang cocok bahasanya: dulu ini membuat AI diam total selamanya kalau
+                # OS tidak punya suara Indonesia (kasus paling umum, karena jarang terpasang bawaan).
+                # Sekarang: tetap bicara pakai suara pertama yang ada, dengan peringatan jelas di chat,
+                # daripada AI seolah rusak padahal cuma bahasa suaranya yang tidak pas.
+                if voices:
+                    voice = voices[0].id
+                    self.speechWarning.emit(
+                        f"Tidak ada suara sistem untuk bahasa '{wanted}', pakai '{voices[0].name}' sebagai gantinya."
+                    )
+                else:
+                    raise RuntimeError(
+                        "tidak ada suara TTS terpasang di sistem "
+                        "(Linux: pasang espeak-ng; Windows/macOS: cek Pengaturan > Ucapan)"
+                    )
+
+            engine.setProperty("voice", voice)
+            self.voiceChosen.emit(voice)
             engine.save_to_file(text, str(path))
             engine.runAndWait()
         finally:
@@ -188,7 +231,11 @@ class Speaker(QThread):
         import sounddevice as sd
         import soundfile as sf
 
-        data, rate = sf.read(str(path), dtype="float32", always_2d=True)
+        try:
+            data, rate = sf.read(str(path), dtype="float32", always_2d=True)
+        except Exception as exc:
+            raise RuntimeError(f"gagal membaca file audio hasil TTS: {exc}") from exc
+
         done = threading.Event()
         pos = 0
 
@@ -204,5 +251,8 @@ class Speaker(QThread):
             self.meter.push(chunk[:, 0])
             pos += frames
 
-        with sd.OutputStream(samplerate=rate, channels=data.shape[1], callback=callback, finished_callback=done.set):
-            done.wait(timeout=len(data) / rate + 5)
+        try:
+            with sd.OutputStream(samplerate=rate, channels=data.shape[1], callback=callback, finished_callback=done.set):
+                done.wait(timeout=len(data) / rate + 5)
+        except Exception as exc:
+            raise RuntimeError(f"gagal memutar audio ({exc}) - cek perangkat output/PortAudio") from exc

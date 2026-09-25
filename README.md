@@ -26,7 +26,6 @@ Butuh Python 3.10 sampai 3.12 (versi paket di bawah diuji bersamaan di 3.12).
 
 ```bash
 python -m venv .venv
-Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
 # Windows: .venv\Scripts\activate      macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
 ```

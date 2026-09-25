@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
@@ -42,14 +42,16 @@ def palm_center(points: list[tuple[float, float]]) -> tuple[float, float]:
     return sum(xs) / len(xs), sum(ys) / len(ys)
 
 
-def _reaches(points: list[tuple[float, float]], aspect: float) -> list[float]:
-    """Jarak tiap ujung jari ke pergelangan, dalam satuan yang sama di X dan Y (aspect membetulkan rasio frame)."""
+def _reaches(points: list[tuple[float, float]], aspect: float, mults: tuple[float, float, float, float] = (1.08, 1.08, 1.08, 1.08)) -> list[float]:
+    """Jarak tiap ujung jari ke pergelangan, dalam satuan yang sama di X dan Y (aspect membetulkan rasio frame).
+    `mults` mengatur seberapa "lurus" tiap jari harus supaya dianggap terbuka -- makin besar, makin longgar
+    (ujung boleh lebih dekat ke pergelangan dan tetap terhitung terbuka/lurus)."""
     wx, wy = points[0][0], points[0][1] * aspect
 
     def reach(i: int) -> float:
         return math.hypot(points[i][0] - wx, points[i][1] * aspect - wy)
 
-    return [reach(tip) - reach(pip) * 1.08 for tip, pip in FINGERS]
+    return [reach(tip) - reach(pip) * mult for (tip, pip), mult in zip(FINGERS, mults)]
 
 
 def count_open_fingers(points: list[tuple[float, float]], aspect: float = 1.0) -> int:
@@ -63,9 +65,17 @@ def is_pointing(points: list[tuple[float, float]], aspect: float = 1.0) -> bool:
     return index_m > 0 and middle_m <= 0 and ring_m <= 0 and pinky_m <= 0
 
 
+# Ambang tekuk khusus untuk pose dua-jari: jari manis secara anatomis susah ditekuk sendirian
+# selagi telunjuk+tengah diluruskan (tendonnya terikat dengan jari tengah), jadi kalau dipakai
+# ambang seketat is_pointing(), pose ini sering gagal terdeteksi atau berkedip mati-hidup.
+# Kelingking sedikit dilonggarkan juga untuk alasan yang sama, walau tidak separah manis.
+_TWO_FINGER_MULTS = (1.08, 1.08, 1.35, 1.20)
+
+
 def is_two_finger(points: list[tuple[float, float]], aspect: float = 1.0) -> bool:
-    """Telunjuk DAN tengah lurus, manis dan kelingking menekuk. Ibu jari tidak dicek."""
-    index_m, middle_m, ring_m, pinky_m = _reaches(points, aspect)
+    """Telunjuk DAN tengah lurus, manis dan kelingking menekuk (dengan ambang yang lebih toleran
+    untuk manis/kelingking dibanding is_pointing, karena keduanya sulit ditekuk sendiri-sendiri)."""
+    index_m, middle_m, ring_m, pinky_m = _reaches(points, aspect, _TWO_FINGER_MULTS)
     return index_m > 0 and middle_m > 0 and ring_m <= 0 and pinky_m <= 0
 
 
@@ -85,6 +95,44 @@ class DropoutGate:
         if self._last_ok is None:
             return True
         return (now - self._last_ok) > self.grace_s
+
+
+class ModeStabilizer:
+    """Menahan pergantian pose (mis. "point" <-> "two") sampai pose baru konsisten beberapa frame
+    berturut-turut, sebelum benar-benar dianggap berganti.
+
+    Ini melengkapi pelonggaran ambang di atas: deteksi per-frame masih bisa sesekali salah baca
+    (satu frame ring finger kelihatan lurus, frame berikutnya menekuk lagi). Tanpa penstabil ini,
+    tiap kali klasifikasi berkedip, GestureController mereset filter kemiringannya (OneEuroFilter
+    perlu beberapa sampel untuk "pemanasan"), sehingga gesture terasa lambat merespons atau susah
+    dipicu -- padahal begitu polanya konsisten, seharusnya responsif seperti kemiringan satu-jari."""
+
+    def __init__(self, frames: int = 2) -> None:
+        self.frames = max(1, frames)
+        self._current = "other"
+        self._pending: str | None = None
+        self._count = 0
+
+    def reset(self) -> None:
+        self._current = "other"
+        self._pending = None
+        self._count = 0
+
+    def update(self, raw: str) -> str:
+        if raw == self._current:
+            self._pending = None
+            self._count = 0
+            return self._current
+        if raw == self._pending:
+            self._count += 1
+        else:
+            self._pending = raw
+            self._count = 1
+        if self._count >= self.frames:
+            self._current = raw
+            self._pending = None
+            self._count = 0
+        return self._current
 
 
 def _detect_hands(result, min_open_fingers: int, aspect: float) -> tuple[HandState, ...]:
@@ -121,6 +169,7 @@ class HandTracker(QThread):
         self._stop = threading.Event()
         self._lock = threading.Lock()
         self._state: tuple[HandState, ...] = NO_HANDS
+        self._mode_gates = [ModeStabilizer(frames=2), ModeStabilizer(frames=2)]  # satu per slot tangan (maks 2)
 
     def latest(self) -> tuple[HandState, ...]:
         """Semua tangan yang terlihat saat ini (0, 1, atau 2), untuk digambar di kartu kamera."""
@@ -162,7 +211,7 @@ class HandTracker(QThread):
                 rgb = np.ascontiguousarray(cv2.cvtColor(small, cv2.COLOR_BGR2RGB))
                 last_ts = max(last_ts + 1, int(time.monotonic() * 1000))
                 result = landmarker.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), last_ts)
-                states = _detect_hands(result, min_open, aspect)
+                states = self._stabilize(_detect_hands(result, min_open, aspect))
                 with self._lock:
                     self._state = states
                 label = self._label(states)
@@ -177,6 +226,23 @@ class HandTracker(QThread):
                     self._stop.wait(rest)
         finally:
             landmarker.close()
+
+    def _stabilize(self, states: tuple[HandState, ...]) -> tuple[HandState, ...]:
+        """Stabilkan klasifikasi pointing/two_finger per slot tangan, supaya kedipan satu-dua frame
+        pada deteksi jari tidak langsung mengganti mode gesture (lihat ModeStabilizer)."""
+        out = []
+        for i, gate in enumerate(self._mode_gates):
+            if i >= len(states):
+                gate.reset()
+                continue
+            state = states[i]
+            raw = "two" if state.two_finger else "point" if state.pointing else "other"
+            stable = gate.update(raw)
+            if stable == raw:
+                out.append(state)
+            else:
+                out.append(replace(state, pointing=(stable == "point"), two_finger=(stable == "two")))
+        return tuple(out)
 
     @staticmethod
     def _label(states: tuple[HandState, ...]) -> str:

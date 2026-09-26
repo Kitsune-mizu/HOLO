@@ -20,10 +20,16 @@ lain di komputer lewat "../../" atau path absolut.
 """
 from __future__ import annotations
 
+import json
 import os
 import sys
 from datetime import datetime
 from pathlib import Path
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10
+    import tomli as tomllib  # type: ignore[no-redef]
 
 from PySide6.QtCore import Property, QObject, QTimer, QUrl, Signal, Slot
 
@@ -135,7 +141,21 @@ class ProjectEditor(QObject):
 
     @Slot(str, str)
     def applyFile(self, rel: str, content: str) -> None:
-        """Simpan LALU terapkan sekarang juga (lihat penjelasan di docstring modul)."""
+        """Simpan LALU terapkan sekarang juga (lihat penjelasan di docstring modul).
+
+        Sebelum menyimpan, isinya dicek dulu (lihat `_validate`). Untuk file `.py`, `.toml` dan
+        `.json`, kesalahan ketik seperti "fals" (harusnya "false") akan membuat proses baru gagal
+        total begitu di-restart -- kalau aplikasi tidak dijalankan dari terminal, orang tidak akan
+        tahu kenapa aplikasinya tidak mau menyala lagi. Jadi kalau isinya jelas tidak valid, TIDAK
+        disimpan dan TIDAK di-restart; pesannya muncul di toast dengan baris/penyebabnya, dan apa
+        yang sedang diketik tetap ada di editor supaya bisa langsung dibetulkan.
+        """
+        problem = self._validate(rel, content)
+        if problem:
+            self.errorOccurred.emit(problem)
+            self._log(problem)
+            return
+
         if not self._write(rel, content):
             return
         self.fileSaved.emit(rel)
@@ -149,6 +169,32 @@ class ProjectEditor(QObject):
             self.reloading.emit(True)
             self._log("Perubahan pada file ini perlu memulai ulang aplikasi supaya berlaku. Memulai ulang...")
             QTimer.singleShot(RESTART_APPLY_DELAY_MS, self._restart_app)
+
+    @staticmethod
+    def _validate(rel: str, content: str) -> str | None:
+        """Pengecekan cepat sebelum diterapkan: sintaks TOML/JSON/Python valid atau tidak.
+
+        Ini BUKAN jaminan filenya 100% benar (nilai yang salah tapi sintaksnya valid, atau modul
+        Python yang gagal saat dijalankan bukan saat dibaca, tidak tertangkap di sini) -- hanya
+        menangkap kesalahan ketik nyata yang pasti membuat file gagal dibaca sama sekali, seperti
+        kasus "fals" yang seharusnya "false" di TOML. None berarti tidak ada masalah yang terdeteksi.
+        """
+        lower = rel.lower()
+        try:
+            if lower.endswith(".toml"):
+                tomllib.loads(content)
+            elif lower.endswith(".json"):
+                json.loads(content)
+            elif lower.endswith(".py"):
+                compile(content, rel, "exec")
+        except tomllib.TOMLDecodeError as exc:
+            return f'"{rel}" tidak valid, tidak jadi disimpan: {exc}'
+        except json.JSONDecodeError as exc:
+            return f'"{rel}" tidak valid, tidak jadi disimpan: baris {exc.lineno}, kolom {exc.colno} - {exc.msg}'
+        except SyntaxError as exc:
+            where = f"baris {exc.lineno}" + (f", kolom {exc.offset}" if exc.offset else "")
+            return f'"{rel}" tidak valid, tidak jadi disimpan: {where} - {exc.msg}'
+        return None
 
     def _write(self, rel: str, content: str) -> bool:
         try:

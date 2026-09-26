@@ -26,6 +26,25 @@ Rectangle {
     readonly property bool hasFile: currentPath !== ""
     readonly property bool dirty: hasFile && area.text !== savedText
 
+    // Toast: notifikasi mengambang untuk error/peringatan, supaya tidak cuma lewat sekilas di
+    // teks status kecil atau tertimbun di panel log. Kalau beberapa muncul cepat berurutan,
+    // ditampilkan satu-satu bergantian (antrean), bukan saling menimpa.
+    property var toastQueue: []
+    property string toastText: ""
+    property bool toastVisible: false
+
+    function pushToast(message) {
+        toastQueue.push(message)
+        if (!toastVisible) showNextToast()
+    }
+    function showNextToast() {
+        toastTimer.stop()
+        if (toastQueue.length === 0) { toastVisible = false; return }
+        toastText = toastQueue.shift()
+        toastVisible = true
+        toastTimer.restart()
+    }
+
     function openAt(path, content) {
         root.currentPath = path
         root.savedText = content
@@ -47,7 +66,7 @@ Rectangle {
         target: editor
         function onFileOpened(path, content) { root.openAt(path, content) }
         function onFileSaved(path) { root.savedText = area.text; status.text = "Tersimpan"; statusTimer.restart() }
-        function onErrorOccurred(message) { status.text = message; statusTimer.restart() }
+        function onErrorOccurred(message) { status.text = message; statusTimer.restart(); root.pushToast(message) }
         function onReloading(active) { root.applying = active }
         function onLogMessage(line) {
             logModel.append({ text: line })
@@ -232,6 +251,51 @@ Rectangle {
             font.pixelSize: Theme.fsSmall
         }
     }
+
+    // Toast error/peringatan: mengambang di atas isi panel, warna aksen kuning peringatan.
+    Rectangle {
+        id: toast
+        opacity: root.toastVisible ? 1 : 0
+        visible: opacity > 0.01
+        Behavior on opacity { NumberAnimation { duration: Theme.fast } }
+        anchors { top: parent.top; horizontalCenter: parent.horizontalCenter; topMargin: Theme.px(46) }
+        width: Math.min(parent.width - Theme.px(48), Theme.px(560))
+        height: Math.max(Theme.px(40), toastMsg.implicitHeight + Theme.px(20))
+        radius: Theme.radiusSmall
+        color: Theme.cardSolid
+        border.color: Theme.line
+        border.width: 1
+        z: 40
+
+        Rectangle {                              // batang aksen kiri, penanda ini peringatan/error
+            anchors { left: parent.left; top: parent.top; bottom: parent.bottom; margins: 1 }
+            width: Theme.px(3)
+            radius: Theme.px(1.5)
+            color: Theme.warn
+        }
+        Txt {
+            id: toastMsg
+            anchors { left: parent.left; right: toastClose.left; verticalCenter: parent.verticalCenter; leftMargin: Theme.px(16); rightMargin: Theme.px(6) }
+            text: root.toastText
+            wrapMode: Text.Wrap
+            color: Theme.text
+            font.pixelSize: Theme.fsSmall
+        }
+        Text {
+            id: toastClose
+            anchors { right: parent.right; verticalCenter: parent.verticalCenter; rightMargin: Theme.px(12) }
+            text: "\u2715"
+            color: Theme.dim
+            font.pixelSize: Theme.fsSmall
+            MouseArea {
+                anchors.fill: parent
+                anchors.margins: -Theme.px(8)
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.showNextToast()
+            }
+        }
+    }
+    Timer { id: toastTimer; interval: 4500; onTriggered: root.showNextToast() }
 
     // Overlay "menerapkan...": tampil sesaat sebelum QML dimuat ulang, atau lebih lama sebelum
     // aplikasi me-restart dirinya sendiri. Titik yang berputar supaya terasa hidup, bukan macet.

@@ -47,11 +47,12 @@ def build(cfg: Config, no_camera: bool = False, no_voice: bool = False):
 
     provider = FrameProvider()
     controller = Controller(cfg, provider, no_camera=no_camera, no_voice=no_voice)
-    # Diberi parent controller (bukan dibiarkan sementara) supaya tidak dibuang Python sebelum QML memakainya.
-    project_editor = ProjectEditor(controller)
 
     engine = QQmlApplicationEngine()
     engine.addImageProvider("camera", provider)
+    # Diberi parent controller (bukan dibiarkan sementara) supaya tidak dibuang Python sebelum QML memakainya.
+    # Perlu `engine` untuk bisa memuat ulang QML sendiri saat tombol "Simpan & Terapkan" ditekan pada file .qml.
+    project_editor = ProjectEditor(engine, controller, controller)
     context = engine.rootContext()
     context.setContextProperty("controller", controller)
     context.setContextProperty("messageModel", controller.messages)

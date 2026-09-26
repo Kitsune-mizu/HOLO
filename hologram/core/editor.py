@@ -194,12 +194,31 @@ class ProjectEditor(QObject):
         self.reloading.emit(False)
 
     def _restart_app(self) -> None:
-        """Ganti proses Python ini sepenuhnya dengan proses baru yang sama (argumen baris perintah
-        sama persis), supaya semua modul dan konfigurasi dibaca ulang dari awal -- persis seperti
-        menutup lalu menjalankan aplikasinya lagi secara manual, tapi otomatis."""
+        """Ganti proses Python ini sepenuhnya dengan proses baru, supaya semua modul dan konfigurasi
+        dibaca ulang dari awal -- persis seperti menutup lalu menjalankan aplikasinya lagi secara
+        manual, tapi otomatis."""
         self._log("Menutup thread yang berjalan sebelum memulai ulang...")
         try:
             self._controller.shutdown()
         except Exception as exc:
             self._log(f"Peringatan saat menutup: {exc}")
-        os.execv(sys.executable, [sys.executable] + sys.argv)
+        args = self._relaunch_args()
+        os.execv(args[0], args)
+
+    @staticmethod
+    def _relaunch_args() -> list[str]:
+        """Susun argumen untuk menjalankan ulang aplikasi ini.
+
+        Aplikasi ini dijalankan dengan `python -m hologram ...`. Saat dijalankan lewat `-m`,
+        `sys.argv[0]` TIDAK menyimpan "-m hologram" -- Python sudah menggantinya jadi path absolut
+        ke `hologram/__main__.py`. Kalau `os.execv` memakai `sys.argv` apa adanya, proses baru
+        menjalankan `__main__.py` langsung sebagai skrip biasa (bukan sebagai bagian dari paket
+        `hologram`), dan `from .app import run` di dalamnya gagal dengan "attempted relative
+        import with no known parent package". Jadi argumen `-m hologram` disusun ulang secara
+        eksplisit, bukan mengandalkan `sys.argv[0]`.
+        """
+        extra_args = sys.argv[1:]   # mis. --no-camera, --no-voice, --config ...
+        if getattr(sys, "frozen", False):
+            # Dibungkus jadi satu executable (PyInstaller dkk): jalankan ulang executable itu sendiri.
+            return [sys.executable] + extra_args
+        return [sys.executable, "-m", "hologram"] + extra_args

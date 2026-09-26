@@ -218,12 +218,31 @@ def test_apply_on_python_file_restarts_the_whole_process(project, project_qobjec
     ed, engine, controller = project_qobject
     execv_calls = []
     monkeypatch.setattr(editor.os, "execv", lambda *a: execv_calls.append(a))
+    monkeypatch.setattr(editor.sys, "argv", ["A:\\HologramOS\\hologram\\__main__.py"])
     ed.applyFile("hologram/app.py", "print('ubah total')\n")
     pump(700)
     assert controller.shutdown_called                   # thread dimatikan dulu sebelum restart
     assert len(execv_calls) == 1
-    assert execv_calls[0][0] == editor.sys.executable
+    path, args = execv_calls[0]
+    assert path == editor.sys.executable
+    assert args == [editor.sys.executable, "-m", "hologram"]   # bukan sys.argv apa adanya (lihat _relaunch_args)
     assert engine.load_calls == 0                        # bukan file .qml: tidak menyentuh QML sama sekali
+
+
+def test_relaunch_args_uses_module_flag_not_raw_argv(project_qobject, monkeypatch):
+    ed, _, _ = project_qobject
+    monkeypatch.setattr(editor.sys, "argv", ["A:\\HologramOS\\hologram\\__main__.py", "--no-camera"])
+    monkeypatch.setattr(editor.sys, "frozen", False, raising=False)
+    args = ed._relaunch_args()  # Panggil dari instance `ed`
+    assert args == [editor.sys.executable, "-m", "hologram", "--no-camera"]
+
+
+def test_relaunch_args_reruns_frozen_executable_directly(project_qobject, monkeypatch):
+    ed, _, _ = project_qobject
+    monkeypatch.setattr(editor.sys, "argv", ["HologramOS.exe", "--no-voice"])
+    monkeypatch.setattr(editor.sys, "frozen", True, raising=False)
+    args = ed._relaunch_args()  # Panggil dari instance `ed`
+    assert args == [editor.sys.executable, "--no-voice"]
 
 
 def test_apply_on_config_toml_also_restarts(project, project_qobject, qapp, monkeypatch):

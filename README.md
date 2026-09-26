@@ -4,22 +4,6 @@ Penampil model 3D berwujud jendela desktop. Modelnya bisa diputar dengan gerakan
 
 Tampilannya mengikuti `hologram-os-preview.png`: latar gelap hangat, grid tipis, garis kawat krem, kartu kamera di kanan bawah.
 
-```
-┌──────────────────────────────────────────────────────────┐
-│ HOLOGRAM OS  [CHAT]                                      │
-│ SHAPE: PYRAMID                                           │
-│ ┌────────────────┐                                       │
-│ │ AI ▾  [Off|On] │            ╱╲                         │
-│ │ pesan...       │           ╱  ╲          ┌───────────┐ │
-│ │                │          ╱____╲         │ info AI   │ │
-│ └────────────────┘         PYRAMID         │ FPS, RAM  │ │
-│ [Sembunyikan ⌄]                            ├───────────┤ │
-│ ┌────────────────┐                         │  kamera   │ │
-│ │ tulis...  🎤 ➤ │                         └───────────┘ │
-│ └────────────────┘                                       │
-└──────────────────────────────────────────────────────────┘
-```
-
 ## Pasang
 
 Butuh Python 3.10 sampai 3.12 (versi paket di bawah diuji bersamaan di 3.12).
@@ -137,29 +121,3 @@ assets/        models/*.glb, models.json, ai/, whisper/
 tools/         download_assets.py, make_placeholder_models.py
 tests/
 ```
-
-## Uji
-
-```bash
-pip install -r requirements-dev.txt
-python -m pytest tests -q
-```
-
-## Kalau ada masalah
-
-| Gejala | Yang dicek |
-|---|---|
-| Jendela tidak muncul, ada galat plugin Qt "xcb" atau "cocoa" | Langkah OpenCV di atas belum dilakukan. |
-| Kartu kamera menulis "Kamera tidak ditemukan" | Tutup aplikasi lain yang memakai kamera, atau ubah `[camera] index` di `config.toml`. |
-| Kartu kamera menulis "Model tangan belum diunduh" | Jalankan `python tools/download_assets.py`. |
-| Mikrofon menjawab "Model Whisper belum diunduh" | Sama, lalu pastikan `stt_model` cocok dengan nama folder di `assets/whisper/`. |
-| Tidak ada suara AI | Lihat baris pesan di chat. Di Linux pyttsx3 butuh `espeak-ng`. `sounddevice` butuh PortAudio (`libportaudio2`). |
-| Garis kawat tidak muncul | Driver GPU lama. Set `wireframe = false`. |
-| "Kuota gratis Gemini habis (429)" | Tunggu, atau aktifkan penyedia cadangan di `config.toml`. Offline tetap jalan. |
-| Swipe salah arah terbaca | Naikkan `dominance` dan `distance` di `[swipe]`. |
-
-## Yang sudah dan belum diuji
-
-Sudah, di lingkungan Linux tanpa layar (Xvfb dengan OpenGL perangkat lunak): 56 uji otomatis, aplikasi utuh dijalankan dan diambil tangkapan layarnya di beberapa ukuran jendela dan keadaan (chat tersembunyi, dropdown terbuka, mode online, tanpa internet, bar suara, kamera dengan sumber video palsu). Rotasi dan zoom dicek lewat tangkapan layar.
-
-Belum bisa diuji di sana, jadi periksa di mesinmu: kamera dan deteksi tangan sungguhan (model MediaPipe tidak bisa diunduh dari lingkungan itu), mikrofon dan Whisper, suara pyttsx3, Ollama asli, dan panggilan Gemini asli. Logika di sekitar semuanya sudah diuji dengan penyedia tiruan. Uji gesture pertama kali sebaiknya dengan pencahayaan cukup dan telapak menghadap kamera.

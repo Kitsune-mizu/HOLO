@@ -62,7 +62,7 @@ fast_commands = true        # zoom, putar, ganti model dijalankan langsung tanpa
 timeout_s = 120
 
 [online]
-gemini_models = ["gemini-3.5-flash-lite"]   # satu model saja: satu pesan = satu permintaan. Daftar untuk kuncimu: python tools/check_gemini.py
+gemini_models = ["gemini-3.5-flash-lite"]   
 min_interval_s = 4          # jarak minimum antar permintaan ke Google
 cooldown_s = 90             # jeda otomatis setelah kuota habis (429)
 use_search = false          # izinkan Gemini mencari info (Google Search)

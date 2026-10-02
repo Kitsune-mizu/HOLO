@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.pytest_cache/
+assets/ai/*.task
+assets/whisper/*
+!assets/whisper/.gitkeep
+
+# Abaikan file model yang berukuran besar
+assets/models/

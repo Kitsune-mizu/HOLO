@@ -1,0 +1,31 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Hologram OS",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "hologram",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Hologram OS (tanpa kamera dan suara)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "hologram",
+      "args": ["--no-camera", "--no-voice"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Uji (pytest)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["tests", "-q"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    }
+  ]
+}

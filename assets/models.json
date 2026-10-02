@@ -1,0 +1,125 @@
+{
+  "models": [
+    {
+      "id": "pyramid",
+      "name": "Pyramid",
+      "aliases": [
+        "piramida",
+        "piramid",
+        "limas",
+        "pyramid shape"
+      ],
+      "category": "bentuk dasar",
+      "country": null,
+      "kind": "limas segi empat",
+      "file": "pyramid.glb",
+      "description": "Limas segi empat sederhana, dibuat oleh skrip contoh.",
+      "license": "CC0-1.0",
+      "source": "tools/make_placeholder_models.py"
+    },
+    {
+      "id": "drone",
+      "name": "Drone",
+      "aliases": [
+        "quadcopter",
+        "multirotor",
+        "drone quadcopter",
+        "uav"
+      ],
+      "category": "drone",
+      "country": null,
+      "kind": "quadcopter empat baling-baling",
+      "file": "drone.glb",
+      "description": "Drone quadcopter sederhana dengan badan, empat lengan, empat baling-baling, kamera kecil, dan kaki. Bentuk generik buatan skrip, bukan replika produk tertentu.",
+      "license": "CC0-1.0",
+      "source": "tools/make_placeholder_models.py"
+    },
+    {
+      "id": "fighter",
+      "name": "Fighter Jet",
+      "aliases": [
+        "jet tempur",
+        "pesawat tempur",
+        "jet",
+        "fighter",
+        "pesawat jet"
+      ],
+      "category": "pesawat",
+      "country": null,
+      "kind": "jet tempur sayap delta",
+      "file": "fighter.glb",
+      "description": "Jet tempur sayap delta sederhana dengan kanopi, sirip ekor, dan stabilizer. Bentuk generik buatan skrip, bukan replika pesawat tertentu.",
+      "license": "CC0-1.0",
+      "source": "tools/make_placeholder_models.py"
+    },
+    {
+      "id": "bomber",
+      "name": "Bomber",
+      "aliases": [
+        "pembom",
+        "pesawat pembom",
+        "bomber aircraft",
+        "pesawat bomber"
+      ],
+      "category": "pesawat",
+      "country": null,
+      "kind": "pembom berat empat mesin",
+      "file": "bomber.glb",
+      "description": "Pesawat pembom berat sederhana dengan sayap menyapu, empat mesin, dan ekor. Bentuk generik buatan skrip, bukan replika pesawat tertentu.",
+      "license": "CC0-1.0",
+      "source": "tools/make_placeholder_models.py"
+    },
+    {
+      "id": "globemaster_c17",
+      "name": "Globemaster C-17",
+      "aliases": [
+        "c17",
+        "globemaster",
+        "c17 globemaster",
+        "c17 globemaster iii",
+        "c17 globemaster iii"
+      ],
+      "category": "pesawat",
+      "country": "Amerika Serikat",
+      "kind": "pesawat kargo",
+      "file": "globemaster.glb",
+      "description": "Model Globemaster C-17, pesawat kargo terbesar di dunia buatan Antonov, Ukraina.",
+      "license": "CC-BY-4.0",
+      "source": "https://sketchfab.com/3d-models/c-17a-globemaster-iii-472c12abe72f435a95f9b54f4c469e29"
+    },
+    {
+      "id": "yamato_battleship",
+      "name": "yamato battleship",
+      "aliases": [
+        "yamato",
+        "battleship",
+        "yamato battleship",
+        "yamato battleship",
+        "yamato battleship"
+      ],
+      "category": "kapal perang",
+      "country": "Jepang",
+      "kind": "battleship",
+      "file": "yamato_battleship.glb",
+      "description": "Model kapal perang Yamato, kapal perang terbesar di dunia buatan Jepang pada era Perang Dunia II.",
+      "license": "CC-BY-4.0",
+      "source": "https://sketchfab.com/3d-models/ijn-yamato-battleship-381a5874e48c48cd8feec1890437f4bd"
+    },
+    {
+      "id": "ww1_plane",
+      "name": "WW1 Plane",
+      "aliases": [
+        "ww1 plane",
+        "world war one plane",
+        "stylized ww1 plane"
+      ],
+      "category": "pesawat perang",
+      "country": "us",
+      "kind": "pesawat perang ww1",
+      "file": "ww1_plane.glb",
+      "description": "Model pesawat perang WW1, pesawat perang sederhana dengan sayap menyapu dan mesin tunggal.",
+      "license": "CC-BY-4.0",
+      "source": "https://sketchfab.com/3d-models/stylized-ww1-plane-c4edeb0e410f46e8a4db320879f0a1db"
+    }
+  ]
+}

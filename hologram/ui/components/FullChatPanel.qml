@@ -33,11 +33,26 @@ Item {
             Row {
                 anchors { right: parent.right; verticalCenter: parent.verticalCenter }
                 spacing: Theme.px(8)
-                // Token yang SUDAH terpakai sesi ini (dari respons Gemini sendiri, akumulasi) -
-                // bukan "sisa kuota", karena Gemini tidak punya endpoint publik untuk itu di API key biasa.
+                // Pemilih engine: dari fullAI.engines - daftar satu-satunya tempat ini dibaca, jadi
+                // menambah engine baru di full_session.py otomatis muncul di sini juga.
+                Row {
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Theme.px(4)
+                    Repeater {
+                        model: fullAI.engines
+                        ToggleButton {
+                            text: modelData.label
+                            checked: fullAI.engine === modelData.id
+                            onClicked: fullAI.selectEngine(modelData.id)
+                        }
+                    }
+                }
+                // Token yang SUDAH terpakai sesi ini dengan engine aktif (akumulasi) - bukan "sisa
+                // kuota": baik Gemini maupun OpenRouter tidak punya endpoint publik untuk itu.
                 Txt {
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "Gemini" + (fullAI.tokensUsed > 0 ? " · " + fullAI.tokensUsed + " token" : "")
+                    visible: fullAI.tokensUsed > 0
+                    text: fullAI.tokensUsed + " token"
                     font.pixelSize: Theme.fsSmall
                     color: Theme.muted
                 }

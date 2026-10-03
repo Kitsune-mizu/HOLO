@@ -48,16 +48,15 @@ DEFAULTS: dict[str, Any] = {
     "network": {"check_interval_s": 8},
     "ai_full": {
         "max_output_tokens": 2048,
-        # tts_engine: "edge" (default, online Microsoft), "system" (suara OS, tanpa internet), atau
-        # "gemini" (Voice Design - suara kustom dari deskripsi teks, mis. gaya anime).
+        # engine: "gemini" (Google AI Studio, butuh GEMINI_API_KEY) atau "openrouter" (model gratis
+        # pilihan, butuh OPENROUTER_API_KEY). Lihat ai/full_session.py.
+        "engine": "gemini",
+        "openrouter_model": "google/gemma-3-27b-it:free",
+        # tts_engine: "edge" (default, online Microsoft) atau "system" (suara OS, tanpa internet).
+        # ("gemini" - Voice Design suara kustom - dihapus: API-nya terlalu sering gagal/ditolak.)
         "tts_engine": "edge", "tts_rate": 175,
         "tts_voice": "id-ID-GadisNeural", "tts_voice_en": "en-US-JennyNeural",
         "tts_system_voice_id": "", "tts_system_voice_en": "Zira",
-        "gemini_tts_model": "gemini-3.8-flash-tts",
-        "gemini_voice_prompt": "",           # cth: "Suara karakter anime perempuan remaja yang ceria, energik, nada tinggi khas dubber Jepang."
-        "gemini_voice_gender": "female",     # "female" | "male" | "neutral"
-        "gemini_voice_language_code": "",    # kosong = otomatis ikut bahasa balasan (id-ID/en-US)
-        "gemini_voice_style": "",            # opsional, cth: "cheerful and energetic"
     },
 }
 

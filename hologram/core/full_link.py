@@ -39,6 +39,7 @@ class FullLink(QObject):
     speakingChanged = Signal()
     levelChanged = Signal()
     voiceEnabledChanged = Signal()
+    engineChanged = Signal()
 
     def __init__(self, cfg, parent=None) -> None:
         super().__init__(parent)
@@ -55,9 +56,7 @@ class FullLink(QObject):
         self._workers: list[_AskWorker] = []
 
         self.meter = LevelMeter()
-        speaker_cfg = dict(cfg.section("ai_full"))
-        speaker_cfg["_gemini_api_key"] = cfg.secret("GEMINI_API_KEY")   # dipakai hanya kalau tts_engine="gemini"
-        self.speaker = FullSpeaker(speaker_cfg, self.meter, self)
+        self.speaker = FullSpeaker(dict(cfg.section("ai_full")), self.meter, self)
         self.speaker.textReady.connect(self._on_text_ready)
         self.speaker.speechStarted.connect(self._on_speech_started)
         self.speaker.speechFinished.connect(self._on_speech_finished)
@@ -89,11 +88,18 @@ class FullLink(QObject):
         return self._voice_enabled
 
     def _get_tokens_used(self) -> int:
-        g = self.session._gemini
-        return g.total_prompt_tokens + g.total_output_tokens
+        p = self.session._active_provider
+        return p.total_prompt_tokens + p.total_output_tokens
 
     def _get_requests_used(self) -> int:
-        return self.session._gemini.request_count
+        return self.session._active_provider.request_count
+
+    def _get_engine(self) -> str:
+        return self.session.engine
+
+    @Property(list, constant=True)
+    def engines(self) -> list:
+        return [{"id": e_id, "label": label} for e_id, label in self.session.engines]
 
     def _set_voice_enabled(self, on: bool) -> None:
         if on != self._voice_enabled:
@@ -108,8 +114,16 @@ class FullLink(QObject):
     # BENAR-BENAR terpakai sejauh ini di sesi ini, dari usageMetadata respons Gemini sendiri.
     tokensUsed = Property(int, _get_tokens_used, notify=busyChanged)
     requestsUsed = Property(int, _get_requests_used, notify=busyChanged)
+    engine = Property(str, _get_engine, notify=engineChanged)
 
     # ------------------------------------------------------------------ slot untuk QML
+    @Slot(str)
+    def selectEngine(self, engine_id: str) -> None:
+        if self.session.select_engine(engine_id):
+            self.engineChanged.emit()
+            self.busyChanged.emit()   # dipakai juga sebagai sinyal "baca ulang" tokensUsed/requestsUsed
+            self.messages.append("system", f"Engine AI: {dict(self.session.engines).get(engine_id, engine_id)}.")
+
     @Slot()
     def clearHistory(self) -> None:
         self.session.reset()

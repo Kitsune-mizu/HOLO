@@ -24,7 +24,6 @@ from pathlib import Path
 from PySide6.QtCore import QThread, Signal
 
 from ..threads import stop_thread
-from .gemini_voice import GeminiVoiceDesigner, VoiceDesignError
 from .level import LevelMeter
 from .tts import clean_for_speech, find_voice, pick_voice
 
@@ -44,7 +43,6 @@ class FullSpeaker(QThread):
         self._quit = threading.Event()
         self._edge_down_until = 0.0
         self._edge_fail_streak = 0
-        self._gemini_voice_id: str | None = None    # di-cache setelah persona pertama kali dibuat
 
     def say(self, text: str, lang: str = "id") -> None:
         text = clean_for_speech(text)
@@ -94,13 +92,6 @@ class FullSpeaker(QThread):
 
     def _synthesize(self, text: str, stem: Path, lang: str = "id") -> Path:
         engine = self._cfg.get("tts_engine", "edge")
-        if engine == "gemini":
-            try:
-                return self._synth_gemini(text, stem.with_suffix(".wav"), lang)
-            except VoiceDesignError as exc:
-                self.speechWarning.emit(f"Voice Design Gemini gagal ({exc}), pakai suara sistem selama 30s ke depan.")
-                self._edge_down_until = max(self._edge_down_until, time.monotonic() + 30.0)  # jangan spam Gemini
-                return self._synth_system(text, stem.with_suffix(".wav"), lang)
         # Konfigurasi bisa melewati edge-tts sama sekali - berguna kalau jaringan memang tidak
         # pernah bisa menjangkau server suara online-nya, supaya tidak ada jeda tunggu sama sekali.
         if engine != "edge":
@@ -121,24 +112,6 @@ class FullSpeaker(QThread):
             reason = str(exc) or type(exc).__name__            # beberapa exception (mis. asyncio.TimeoutError) str()-nya kosong
             self.speechWarning.emit(f"Suara online Mode AI gagal ({reason}), pakai suara sistem selama {cooldown:.0f}s ke depan.")
             return self._synth_system(text, stem.with_suffix(".wav"), lang)
-
-    def _synth_gemini(self, text: str, path: Path, lang: str = "id") -> Path:
-        api_key = str(self._cfg.get("_gemini_api_key", ""))
-        model = str(self._cfg.get("gemini_tts_model", "gemini-3.8-flash-tts"))
-        designer = GeminiVoiceDesigner(api_key, model=model)
-        if self._gemini_voice_id is None:
-            prompt = str(self._cfg.get("gemini_voice_prompt", ""))
-            gender = str(self._cfg.get("gemini_voice_gender", "female"))
-            language_code = str(self._cfg.get("gemini_voice_language_code") or ("id-ID" if lang == "id" else "en-US"))
-            # ensure_voice() sendiri sudah cache ke disk (lihat gemini_voice.py) - ini cache tambahan
-            # di memori supaya tidak perlu baca file cache itu lagi selama proses ini masih hidup.
-            self._gemini_voice_id = designer.ensure_voice(prompt, "Mode AI Voice", gender, language_code)
-        style = str(self._cfg.get("gemini_voice_style", ""))
-        wav_bytes = designer.synthesize(text, self._gemini_voice_id, style)
-        path.write_bytes(wav_bytes)
-        if path.stat().st_size < 500:
-            raise VoiceDesignError("audio yang dihasilkan kosong")
-        return path
 
     def _synth_edge(self, text: str, path: Path, lang: str = "id") -> Path:
         import edge_tts

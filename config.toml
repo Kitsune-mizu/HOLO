@@ -67,14 +67,14 @@ timeout_s = 120
 [online]
 # Dipakai HANYA oleh Mode AI (full_session.py) - HologramOS (tampilan model 3D) tidak pernah
 # membaca section ini lagi, selalu lokal (lihat [offline] dan catatan di [app] di atas).
-gemini_models = ["gemini-2.5-flash", "gemini-omni-1.1-flash"]   # model[0] yang dipakai Mode AI
+gemini_models = ["gemini-omni-1.1-flash", "gemini-2.5-flash"]   # model[0] yang dipakai Mode AI
 min_interval_s = 4
 cooldown_s = 90
 use_search = false
 timeout_s = 45
-# "attach_snapshot" dan [[online.fallback]] (Groq/OpenRouter) sengaja dihapus dari sini: keduanya
-# hanya dipakai saat HologramOS punya mode online sendiri, kodenya sudah dihapus karena sekarang
-# cuma Mode AI yang online, dan Mode AI murni Gemini (lihat [ai_full] di bawah).
+# "attach_snapshot" dan [[online.fallback]] (Groq/OpenRouter format lama) sengaja dihapus dari sini:
+# keduanya hanya dipakai saat HologramOS punya mode online sendiri, kodenya sudah dihapus. OpenRouter
+# untuk Mode AI sekarang diatur terpisah di [ai_full] di bawah, bukan di sini.
 
 [voice]
 enabled = true
@@ -92,9 +92,11 @@ tts_system_voice_en = "Zira"   # suara Windows untuk Inggris saat offline (perem
 tts_system_voice_id = ""       # kosong = cari otomatis berdasar bahasa. Isi mis. "Damayanti" kalau OS punya suara itu
 
 [ai_full]
-tts_engine = "gemini"      # Ubah ke "edge" jika Gemini Voice masih gagal
-gemini_voice_prompt = "Suara karakter anime perempuan dewasa muda yang ceria dan energik, nada tinggi, gaya khas dubber Jepang."
-gemini_voice_gender = "female"
+engine = "gemini"            # "gemini" (butuh GEMINI_API_KEY) atau "openrouter" (butuh OPENROUTER_API_KEY)
+openrouter_model = "google/gemma-3-27b-it:free"   # ganti sesuai model gratis pilihan di openrouter.ai/models
+use_search = false            # kosongkan/ikut [online] kalau tidak diisi
+max_output_tokens = 2048      # balasan Mode AI boleh jauh lebih panjang dari HologramOS (800)
+tts_engine = "edge"           # "edge" (online, natural) atau "system" (suara OS, offline)
 
 [network]
 check_interval_s = 8
